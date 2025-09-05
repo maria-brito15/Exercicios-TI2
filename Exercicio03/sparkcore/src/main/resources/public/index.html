@@ -285,6 +285,16 @@
     animation: slideDown 0.5s ease-out;
   }
 
+  .error-message {
+    background: linear-gradient(135deg, #dc2626, #b91c1c);
+    color: white;
+    padding: 15px 20px;
+    border-radius: 10px;
+    margin-bottom: 20px;
+    text-align: center;
+    animation: slideDown 0.5s ease-out;
+  }
+
   @keyframes slideDown {
     from {
       opacity: 0;
@@ -334,6 +344,7 @@
 
   <div class="content">
     <div id="successMessage" class="success-message hidden"></div>
+    <div id="errorMessage" class="error-message hidden"></div>
 
     <div class="section">
       <h2>Criar Produto</h2>
@@ -432,23 +443,41 @@
   const tbody = document.querySelector('#produtosTable tbody');
   const btnCancelEdit = document.getElementById('btnCancelEdit');
   const successMessage = document.getElementById('successMessage');
+  const errorMessage = document.getElementById('errorMessage');
 
   function showSuccess(message) {
     successMessage.textContent = message;
     successMessage.classList.remove('hidden');
+    errorMessage.classList.add('hidden');
     setTimeout(() => {
       successMessage.classList.add('hidden');
     }, 3000);
   }
 
+  function showError(message) {
+    errorMessage.textContent = message;
+    errorMessage.classList.remove('hidden');
+    successMessage.classList.add('hidden');
+    setTimeout(() => {
+      errorMessage.classList.add('hidden');
+    }, 5000);
+  }
+
   async function carregarProdutos() {
     try {
       const res = await fetch(API_URL);
-      const produtos = await res.json();
-
+      
+      if (!res.ok) {
+        throw new Error(`Erro ${res.status}: ${res.statusText}`);
+      }
+      
+      const response = await res.json();
+      
+      const produtos = response.success ? response.data : response;
+      
       tbody.innerHTML = '';
 
-      if (produtos.length === 0) {
+      if (!produtos || produtos.length === 0) {
         tbody.innerHTML = `
           <tr>
             <td colspan="6" class="empty-state">
@@ -479,13 +508,15 @@
         tbody.appendChild(tr);
       });
     } catch (error) {
-              tbody.innerHTML = `
+      console.error('Erro ao carregar produtos:', error);
+      tbody.innerHTML = `
         <tr>
           <td colspan="6" style="text-align: center; color: #dc2626; padding: 40px;">
             Erro ao carregar produtos: ${error.message}
           </td>
         </tr>
       `;
+      showError(`Erro ao carregar produtos: ${error.message}`);
     }
   }
 
@@ -506,26 +537,40 @@
         body: JSON.stringify(produto)
       });
 
+      const responseData = await res.json();
+
       if (res.ok) {
         formCreate.reset();
         carregarProdutos();
-        showSuccess('Produto criado com sucesso!');
+        
+        const message = responseData.message || responseData || 'Produto criado com sucesso!';
+        showSuccess(message);
       } else {
-        alert('Erro ao criar produto');
+        const errorMsg = responseData.message || responseData.error || 'Erro ao criar produto';
+        showError(errorMsg);
       }
     } catch (error) {
-      alert('Erro de conexão: ' + error.message);
+      console.error('Erro ao criar produto:', error);
+      showError('Erro de conexão: ' + error.message);
     }
   });
 
   async function editarProduto(id) {
     try {
       const res = await fetch(`${API_URL}/${id}`);
+      
       if (!res.ok) {
-        alert('Produto não encontrado');
+        if (res.status === 404) {
+          showError('Produto não encontrado');
+        } else {
+          showError('Erro ao carregar produto');
+        }
         return;
       }
-      const produto = await res.json();
+      
+      const responseData = await res.json();
+      
+      const produto = responseData.success ? responseData.data : responseData;
 
       editSection.classList.remove('hidden');
       editSection.scrollIntoView({ behavior: 'smooth' });
@@ -536,7 +581,8 @@
       document.getElementById('precoEdit').value = produto.preco;
       document.getElementById('quantidadeEdit').value = produto.quantidade;
     } catch (error) {
-      alert('Erro ao carregar produto: ' + error.message);
+      console.error('Erro ao carregar produto:', error);
+      showError('Erro ao carregar produto: ' + error.message);
     }
   }
 
@@ -562,15 +608,21 @@
         body: JSON.stringify(produto)
       });
 
+      const responseData = await res.json();
+
       if (res.ok) {
         editSection.classList.add('hidden');
         carregarProdutos();
-        showSuccess('Produto atualizado com sucesso!');
+        
+        const message = responseData.message || responseData || 'Produto atualizado com sucesso!';
+        showSuccess(message);
       } else {
-        alert('Erro ao atualizar produto');
+        const errorMsg = responseData.message || responseData.error || 'Erro ao atualizar produto';
+        showError(errorMsg);
       }
     } catch (error) {
-      alert('Erro de conexão: ' + error.message);
+      console.error('Erro ao atualizar produto:', error);
+      showError('Erro de conexão: ' + error.message);
     }
   });
 
@@ -582,18 +634,28 @@
         method: 'DELETE'
       });
 
+      const responseData = await res.json();
+
       if (res.ok) {
         carregarProdutos();
-        showSuccess('Produto excluído com sucesso!');
+        
+        const message = responseData.message || responseData || 'Produto excluído com sucesso!';
+        showSuccess(message);
       } else {
-        alert('Erro ao deletar produto');
+        const errorMsg = responseData.message || responseData.error || 'Erro ao deletar produto';
+        
+        if (res.status === 409) {
+          showError('Não é possível deletar produto com estoque. Zere o estoque primeiro.');
+        } else {
+          showError(errorMsg);
+        }
       }
     } catch (error) {
-      alert('Erro de conexão: ' + error.message);
+      console.error('Erro ao deletar produto:', error);
+      showError('Erro de conexão: ' + error.message);
     }
   }
 
-  // Carregar produtos ao iniciar
   carregarProdutos();
 </script>
 
